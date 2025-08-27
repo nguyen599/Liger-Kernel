@@ -372,10 +372,10 @@ _str_to_casting_mode = {
 
 def rms_norm_forward(X, W, eps, offset, casting_mode, row_mode):
     if not isinstance(casting_mode, int):
-        torch._assert(casting_mode in _str_to_casting_mode, f"Invalid casting mode: {casting_mode}", "")
+        torch._assert(casting_mode in _str_to_casting_mode, f"Invalid casting mode: {casting_mode}")
         casting_mode = _str_to_casting_mode[casting_mode]
     else:
-        torch._assert(casting_mode in _str_to_casting_mode.values(), f"Invalid casting mode: {casting_mode}", "")
+        torch._assert(casting_mode in _str_to_casting_mode.values(), f"Invalid casting mode: {casting_mode}")
 
     shape = X.shape
     dim = shape[-1]
