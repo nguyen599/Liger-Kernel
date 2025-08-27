@@ -16,14 +16,14 @@ class LigerGroupNorm(nn.Module):
             init_fn (str, optional): Initialization function for the learnable parameters. Default: "ones".
         """
         super().__init__()
-        assert init_fn in [
+        torch._assert(init_fn in [
             "ones",
             "zeros",
-        ], f"init_fn must be either 'ones' or 'zeros', got {init_fn}"
+        ], f"init_fn must be either 'ones' or 'zeros', got {init_fn}")
 
-        assert num_channels % num_groups == 0, (
+        torch._assert(num_channels % num_groups == 0, (
             f"Number of channels {num_channels} must be divisible by num_groups {num_groups}"
-        )
+        ))
         self.num_channels = num_channels
         self.num_groups = num_groups
         self.eps = eps
@@ -33,10 +33,10 @@ class LigerGroupNorm(nn.Module):
 
     def forward(self, hidden_states):
         # hidden_states: (batch_size, num_channels, *)
-        assert hidden_states.dim() >= 3, f"Input must have atleast 3 dimensions, got {hidden_states.dim()}"
-        assert hidden_states.size(1) == self.num_channels, (
+        torch._assert(hidden_states.dim() >= 3, f"Input must have atleast 3 dimensions, got {hidden_states.dim()}")
+        torch._assert(hidden_states.size(1) == self.num_channels, (
             f"Input tensor must have {self.num_channels} channels, got {hidden_states.size(1)}"
-        )
+        ))
         return LigerGroupNormFunction.apply(
             hidden_states,
             self.weight,

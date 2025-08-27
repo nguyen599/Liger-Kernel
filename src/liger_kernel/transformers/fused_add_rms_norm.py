@@ -15,10 +15,10 @@ class LigerFusedAddRMSNorm(nn.Module):
         in_place=False,
     ):
         super().__init__()
-        assert init_fn in [
+        torch._assert(init_fn in [
             "ones",
             "zeros",
-        ], f"init_fn must be either 'ones' or 'zeros', got {init_fn}"
+        ], f"init_fn must be either 'ones' or 'zeros', got {init_fn}")
         self.weight = nn.Parameter(torch.ones(hidden_size) if init_fn == "ones" else torch.zeros(hidden_size))
         self.variance_epsilon, self.offset, self.casting_mode, self.in_place = (eps, offset, casting_mode, in_place)
 

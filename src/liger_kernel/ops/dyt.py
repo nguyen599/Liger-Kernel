@@ -86,7 +86,7 @@ def _dyt_bwd_kernel(
 
 
 def liger_dyt_fwd(x, alpha, gamma, beta):
-    assert x.is_contiguous()
+    torch._assert(x.is_contiguous(), '')
     HAVE_BETA = True if beta is not None else False
     input_shape = x.shape
     x = x.view(-1, input_shape[-1])
@@ -114,7 +114,7 @@ def liger_dyt_fwd(x, alpha, gamma, beta):
 
 
 def liger_dyt_bwd(dy, x, alpha, gamma, beta):
-    assert dy.is_contiguous()
+    torch._assert(dy.is_contiguous(), "")
     input_shape = x.shape
     x = x.view(-1, input_shape[-1])
     M, N = x.shape

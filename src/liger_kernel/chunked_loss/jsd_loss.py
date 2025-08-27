@@ -137,7 +137,7 @@ class LigerFusedLinearJSDLoss(torch.nn.Module):
             chunk_size (int): Size of chunks for processing.
         """
         super().__init__()
-        assert temperature != 0, "Temperature cannot be 0."
+        torch._assert(temperature != 0, "Temperature cannot be 0.")
         self.weight_hard_loss = weight_hard_loss
         self.weight_soft_loss = weight_soft_loss
         self.ignore_index = ignore_index

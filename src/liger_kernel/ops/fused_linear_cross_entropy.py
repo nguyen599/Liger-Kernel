@@ -28,7 +28,7 @@ def fused_linear_cross_entropy_forward(
     accum_dtype=None,
     use_token_scaling=False,
 ):
-    assert isinstance(return_z_loss, bool), f"return_z_loss must be True or False. Got: {return_z_loss}"
+    torch._assert(isinstance(return_z_loss, bool), f"return_z_loss must be True or False. Got: {return_z_loss}")
     device = _input.device
 
     # inputs have shape: BT x H
@@ -65,10 +65,10 @@ def fused_linear_cross_entropy_forward(
     total_sum_non_ignore_ce_weight = total_n_non_ignore
     ce_weight_sum = 0.0
     if ce_weight is not None:
-        assert ce_weight.shape[0] == V, f"If given, weight has to be a Tensor of size V. Got: {ce_weight.shape}"
-        assert torch.is_floating_point(ce_weight), (
+        torch._assert(ce_weight.shape[0] == V, f"If given, weight has to be a Tensor of size V. Got: {ce_weight.shape}")
+        torch._assert(torch.is_floating_point(ce_weight), (
             f"If given, weight has to be a Tensor of floating point dtype. Got: {ce_weight.dtype}"
-        )
+        ))
         total_sum_non_ignore_ce_weight = (
             torch.gather(ce_weight, dim=0, index=target.masked_select(target_mask)).sum().item()
         )

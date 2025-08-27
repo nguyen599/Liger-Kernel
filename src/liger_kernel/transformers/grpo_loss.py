@@ -14,9 +14,9 @@ def triton_grpo_loss(
     eps_high=0.4,
     inplace=True,
 ):
-    assert logits is not None and completion_ids is not None and advantages is not None, (
+    torch._assert(logits is not None and completion_ids is not None and advantages is not None, (
         "must provide logits、completion_ids and advantages"
-    )
+    ))
 
     return GrpoLossFunction.apply(
         logits,
@@ -37,7 +37,7 @@ def triton_grpo_loss(
 """
 import torch
 import trl
-assert trl.__version__.startswith("0.16"), "please pip install trl==0.16"
+torch._assert(trl.__version__.startswith("0.16"), "please pip install trl==0.16")
 from trl.extras.profiling import profiling_decorator
 
 @profiling_decorator
@@ -62,9 +62,9 @@ def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=N
     ref_per_token_logps = inputs["ref_per_token_logps"]
     advantages = inputs["advantages"]
     old_per_token_logps = inputs["old_per_token_logps"]
-    
 
-    per_token_loss, per_token_kl, is_clipped = triton_grpo_loss(logits, 
+
+    per_token_loss, per_token_kl, is_clipped = triton_grpo_loss(logits,
                                                                 old_per_token_logps,
                                                                 ref_per_token_logps,
                                                                 completion_ids,

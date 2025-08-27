@@ -372,10 +372,10 @@ _str_to_casting_mode = {
 
 def rms_norm_forward(X, W, eps, offset, casting_mode, row_mode):
     if not isinstance(casting_mode, int):
-        assert casting_mode in _str_to_casting_mode, f"Invalid casting mode: {casting_mode}"
+        torch._assert(casting_mode in _str_to_casting_mode, f"Invalid casting mode: {casting_mode}", "")
         casting_mode = _str_to_casting_mode[casting_mode]
     else:
-        assert casting_mode in _str_to_casting_mode.values(), f"Invalid casting mode: {casting_mode}"
+        torch._assert(casting_mode in _str_to_casting_mode.values(), f"Invalid casting mode: {casting_mode}", "")
 
     shape = X.shape
     dim = shape[-1]
@@ -390,7 +390,7 @@ def rms_norm_forward(X, W, eps, offset, casting_mode, row_mode):
     RSTD = torch.empty(n_rows, dtype=rstd_dtype, device=X.device)
 
     # Check constraints.
-    assert X.shape[1] == W.shape[0], "Incompatible hidden size dimension between tensor1.shape[1] and tensor2.shape[0]"
+    torch._assert(X.shape[1] == W.shape[0], "Incompatible hidden size dimension between tensor1.shape[1] and tensor2.shape[0]")
 
     # XPU-specific optimization
     kernel_args = {}

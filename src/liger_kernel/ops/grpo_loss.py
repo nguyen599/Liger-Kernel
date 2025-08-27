@@ -48,7 +48,7 @@ def _selective_log_softmax_kernel(
 # compue old_logp and ref_logp, it reduce 10G peak Memory. it does not requires grad
 @torch.no_grad
 def fused_selective_log_softmax(logits: torch.Tensor, input_ids: torch.Tensor, temperature: float = 0.9, mask=None):
-    assert logits.is_contiguous()
+    torch._assert(logits.is_contiguous(), "")
     B, L_ADD_1, N = logits.shape
     L = L_ADD_1 - 1
     input_ids = input_ids[:, -L:]
@@ -238,15 +238,15 @@ class GrpoLossFunction(torch.autograd.Function):
         eps_high,
         inplace,
     ):
-        assert logits.is_contiguous() and completion_ids.is_contiguous()
-        assert old_logp is None or old_logp.is_contiguous()
-        assert (ref_logp is not None and ref_logp.is_contiguous()) if beta != 0.0 else True
+        torch._assert(logits.is_contiguous() and completion_ids.is_contiguous(), "")
+        torch._assert(old_logp is None or old_logp.is_contiguous(), "")
+        torch._assert((ref_logp is not None and ref_logp.is_contiguous()) if beta != 0.0 else True, "")
 
         B, L_ADD_1, N = logits.shape
         L = L_ADD_1 - 1
 
         if completion_mask is not None:
-            assert completion_mask.is_contiguous()
+            torch._assert(completion_mask.is_contiguous(), "")
 
         loss = torch.zeros(B, L, device=logits.device, dtype=torch.float32)
         lse = torch.zeros_like(loss)

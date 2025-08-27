@@ -196,9 +196,9 @@ class LigerFusedLinearJSDFunction(torch.autograd.Function):
         """
         has_label = False
         if shift_labels is not None:
-            assert shift_labels.shape == (teacher_input.shape[0],), (
+            torch._assert(shift_labels.shape == (teacher_input.shape[0],), (
                 f"the shape of shift_labels must be (BT,). Got: {shift_labels.shape}"
-            )
+            ))
             shift_labels = shift_labels.contiguous()
             has_label = True
 
