@@ -1,5 +1,5 @@
 from liger_kernel.ops.grpo_loss import GrpoLossFunction
-
+import torch
 
 def triton_grpo_loss(
     logits,

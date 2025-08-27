@@ -285,7 +285,8 @@ def cross_entropy_forward(
     z_loss_1d = torch.zeros(n_rows, dtype=_input.dtype, device=_input.device) if return_z_loss else None
 
     target_mask = target != ignore_index
-    n_non_ignore = target_mask.sum().item()
+    # n_non_ignore = target_mask.sum().item()
+    n_non_ignore = target_mask.sum().detach().cpu().item()
     torch._assert((target * target_mask).max() < _input.shape[-1], (
         f"Target {target.max()} is out of bounds. Expected < {_input.shape[-1]}"
     ))
