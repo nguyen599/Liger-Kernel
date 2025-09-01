@@ -118,6 +118,7 @@ def element_mul_kernel(
     X_ptr += program_id * X_stride
 
     # Load the gradient output value
+    grad_output_ptr += program_id # fix cross entropy vanishing gradients: https://github.com/NVIDIA/TransformerEngine/pull/2139
     grad_output = tl.load(grad_output_ptr)
 
     # Perform the element-wise multiplication
