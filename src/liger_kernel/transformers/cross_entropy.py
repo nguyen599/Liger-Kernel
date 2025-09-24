@@ -17,15 +17,15 @@ class LigerCrossEntropyLoss(torch.nn.Module):
         return_z_loss: bool = False,
     ):
         super().__init__()
-        assert (label_smoothing >= 0) and (label_smoothing <= 1), (
+        torch._assert((label_smoothing >= 0) and (label_smoothing <= 1), (
             f"label_smoothing must be between 0.0 and 1.0. Got: {label_smoothing}"
-        )
-        assert reduction in {
+        ))
+        torch._assert(reduction in {
             "mean",
             "sum",
             "none",
-        }, f"reduction must be one of 'mean', 'sum', or 'none'. Got: {reduction}"
-        assert softcap is None or softcap > 0, f"softcap must greater than 0.0 or None. Got: {softcap}"
+        }, f"reduction must be one of 'mean', 'sum', or 'none'. Got: {reduction}")
+        torch._assert(softcap is None or softcap > 0, f"softcap must greater than 0.0 or None. Got: {softcap}")
         self.weight = weight
         self.ignore_index = ignore_index
         self.lse_square_scale = lse_square_scale

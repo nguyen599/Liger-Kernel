@@ -37,7 +37,7 @@ class _FSDPForwardRedirection:
             **kwargs: The keyword arguments to the method `method_name`. They will get passed to a patched
                 `forward` method instead.
         """
-        assert isinstance(wrapper_module, FullyShardedDataParallel)
+        torch._assert(isinstance(wrapper_module, FullyShardedDataParallel))
         original_module = wrapper_module._fsdp_wrapped_module
         original_forward = original_module.forward
 

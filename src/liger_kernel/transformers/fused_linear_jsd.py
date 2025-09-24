@@ -70,7 +70,7 @@ class LigerFusedLinearJSD(torch.nn.Module):
 
     def __init__(self, jsd_beta=0.5, ignore_index=-100, temperature=1.0):
         super().__init__()
-        assert temperature != 0, "temperature cannot be 0."
+        torch._assert(temperature != 0, "temperature cannot be 0.")
         self.jsd_beta = jsd_beta
         self.temperature = temperature
         self.ignore_index = ignore_index

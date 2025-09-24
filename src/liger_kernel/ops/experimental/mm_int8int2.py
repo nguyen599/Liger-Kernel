@@ -325,8 +325,8 @@ def matmul_kernel(
 
 
 def matmul(a, b):
-    assert a.shape[1] == b.shape[0] * 4, "Incompatible dimensions, the weight matrix need to be packed"
-    assert a.is_contiguous(), "Matrix A must be contiguous"
+    torch._assert(a.shape[1] == b.shape[0] * 4, "Incompatible dimensions, the weight matrix need to be packed")
+    torch._assert(a.is_contiguous(), "Matrix A must be contiguous")
     M, K = a.shape
     _, N = b.shape
     # c is in int32 to avoid any overflows or underflows

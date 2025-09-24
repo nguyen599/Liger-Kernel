@@ -157,7 +157,7 @@ class LigerFusedLinearUnpairedPreferenceBase(torch.autograd.Function):
             fused_fwd_bwd = torch.compile(fused_fwd_bwd)
 
         # When not paired, use labels to separate chosen and rejected
-        assert preference_labels is not None, "preference_labels must be provided for unpaired preference loss"
+        torch._assert(preference_labels is not None, "preference_labels must be provided for unpaired preference loss")
 
         chunks = max(1, _input.shape[0] // CHUNK_SIZE)
         _input_chunks = torch.chunk(_input, chunks=chunks, dim=0)

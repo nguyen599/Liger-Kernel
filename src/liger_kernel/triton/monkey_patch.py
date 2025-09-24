@@ -1,6 +1,6 @@
 import os
 import random
-
+import torch
 from triton.runtime.cache import FileCacheManager
 
 
@@ -11,7 +11,7 @@ class LigerTritonFileCacheManager(FileCacheManager):
         binary = isinstance(data, bytes)
         if not binary:
             data = str(data)
-        assert self.lock_path is not None
+        torch._assert(self.lock_path is not None, "")
         filepath = self._make_path(filename)
         # Random ID to avoid any collisions
         rnd_id = random.randint(0, 1000000)

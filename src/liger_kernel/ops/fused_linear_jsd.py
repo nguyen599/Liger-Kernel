@@ -135,6 +135,7 @@ def fused_linear_jsd_backward(grad_output, grad_input, grad_weight):
             grad_input,
             grad_input.stride(-2),
             grad_output,
+            1 if grad_output.numel() > 1 else 0,
             H,
             BLOCK_SIZE=BLOCK_SIZE,
             num_warps=32 if not is_hip() else 16,
@@ -149,6 +150,7 @@ def fused_linear_jsd_backward(grad_output, grad_input, grad_weight):
                 grad_weight,
                 grad_weight.stride(-2),
                 grad_output,
+                1 if grad_output.numel() > 1 else 0,
                 H,
                 BLOCK_SIZE=BLOCK_SIZE,
                 num_warps=32 if not is_hip() else 16,
@@ -196,9 +198,9 @@ class LigerFusedLinearJSDFunction(torch.autograd.Function):
         """
         has_label = False
         if shift_labels is not None:
-            assert shift_labels.shape == (teacher_input.shape[0],), (
+            torch._assert(shift_labels.shape == (teacher_input.shape[0],), (
                 f"the shape of shift_labels must be (BT,). Got: {shift_labels.shape}"
-            )
+            ))
             shift_labels = shift_labels.contiguous()
             has_label = True
 

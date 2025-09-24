@@ -96,6 +96,7 @@ def element_mul_kernel(
     X_ptr,
     X_stride,
     grad_output_ptr,
+    grad_output_stride,
     n_cols,
     BLOCK_SIZE: tl.constexpr,
 ):
@@ -118,6 +119,7 @@ def element_mul_kernel(
     X_ptr += program_id * X_stride
 
     # Load the gradient output value
+    grad_output_ptr += program_id * grad_output_stride # fix cross entropy vanishing gradients https://github.com/NVIDIA/TransformerEngine/pull/2139
     grad_output = tl.load(grad_output_ptr)
 
     # Perform the element-wise multiplication
