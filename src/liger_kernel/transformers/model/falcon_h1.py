@@ -1,12 +1,13 @@
-from typing import List
+from typing import TYPE_CHECKING
 from typing import Optional
-from typing import Tuple
 from typing import Union
 
 import torch
 
-from transformers.cache_utils import Cache
 from transformers.modeling_outputs import CausalLMOutputWithPast
+
+if TYPE_CHECKING:
+    from transformers.models.falcon_h1.modeling_falcon_h1 import FalconHybridMambaAttentionDynamicCache
 
 from liger_kernel.transformers.model.loss_utils import LigerForCausalLMLoss
 
@@ -16,17 +17,17 @@ def lce_forward(
     input_ids: torch.LongTensor = None,
     attention_mask: Optional[torch.Tensor] = None,
     position_ids: Optional[torch.LongTensor] = None,
-    past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
+    past_key_values: Optional["FalconHybridMambaAttentionDynamicCache"] = None,
     inputs_embeds: Optional[torch.FloatTensor] = None,
     labels: Optional[torch.LongTensor] = None,
     use_cache: Optional[bool] = None,
     output_attentions: Optional[bool] = None,
     output_hidden_states: Optional[bool] = None,
-    return_dict: Optional[bool] = None,
     cache_position: Optional[torch.LongTensor] = None,
     logits_to_keep: Union[int, torch.Tensor] = 0,
+    skip_logits: Optional[bool] = None,
     **kwargs,
-) -> Union[Tuple, CausalLMOutputWithPast]:
+) -> Union[tuple, CausalLMOutputWithPast]:
     r"""
     labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
         Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
@@ -36,10 +37,10 @@ def lce_forward(
     Example:
 
     ```python
-    >>> from transformers import AutoTokenizer, Llama4ForCausalLM
+    >>> from transformers import AutoTokenizer, FalconH1ForCausalLM
 
-    >>> model = Llama4ForCausalLM.from_pretrained("meta-llama4/Llama4-2-7b-hf")
-    >>> tokenizer = AutoTokenizer.from_pretrained("meta-llama4/Llama4-2-7b-hf")
+    >>> model = FalconH1ForCausalLM.from_pretrained("...")
+    >>> tokenizer = AutoTokenizer.from_pretrained("...")
 
     >>> prompt = "Hey, are you conscious? Can you talk to me?"
     >>> inputs = tokenizer(prompt, return_tensors="pt")
@@ -53,7 +54,6 @@ def lce_forward(
     output_hidden_states = (
         output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
     )
-    return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
     # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
     outputs = self.model(
@@ -65,7 +65,6 @@ def lce_forward(
         use_cache=use_cache,
         output_attentions=output_attentions,
         output_hidden_states=output_hidden_states,
-        return_dict=True,
         cache_position=cache_position,
         **kwargs,
     )
@@ -78,8 +77,15 @@ def lce_forward(
     shift_labels = kwargs.pop("shift_labels", None)
     logits = None
     loss = None
+    # if in training mode, don't materialize logits
+    if skip_logits and labels is None:
+        raise ValueError("skip_logits is True, but labels and shift_labels are None")
 
-    if self.training and (labels is not None or shift_labels is not None):
+    if skip_logits is None:
+        # By default, if in training mode, don't materialize logits
+        skip_logits = self.training and labels is not None
+
+    if skip_logits:
         loss = LigerForCausalLMLoss(
             hidden_states=kept_hidden_states,
             lm_head_weight=self.lm_head.weight,
@@ -88,17 +94,10 @@ def lce_forward(
             hidden_size=self.config.hidden_size,
             **kwargs,
         )
-
-    else:  # if in inference mode materialize logits
+    else:
         logits = self.lm_head(kept_hidden_states)
         if labels is not None or shift_labels is not None:
-            loss = self.loss_function(
-                logits=logits,
-                labels=labels,
-                shift_labels=shift_labels,
-                vocab_size=self.config.vocab_size,
-                **kwargs,
-            )
+            loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size, **kwargs)
 
     return CausalLMOutputWithPast(
         loss=loss,
