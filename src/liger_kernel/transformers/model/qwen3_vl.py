@@ -9,7 +9,7 @@ from transformers.utils import can_return_tuple
 
 from liger_kernel.transformers.model.loss_utils import LigerForCausalLMLoss
 from liger_kernel.transformers.model.loss_utils import unpack_cross_entropy_result
-from liger_kernel.transformers.model.output_classes import LigerQwen2_5_VLCausalLMOutputWithPast
+from liger_kernel.transformers.model.output_classes import LigerQwen3VLCausalLMOutputWithPast
 
 
 @can_return_tuple
@@ -34,8 +34,8 @@ def lce_forward(
     second_per_grid_ts: Optional[torch.Tensor] = None,
     skip_logits: Optional[bool] = None,
     **kwargs,
-) -> Union[Tuple, LigerQwen2_5_VLCausalLMOutputWithPast]:
-    r"""
+) -> Union[Tuple, LigerQwen3VLCausalLMOutputWithPast]:
+    """
     labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
         Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
         config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
@@ -52,17 +52,13 @@ def lce_forward(
         The rope index difference between sequence length and multimodal rope.
     second_per_grid_ts (`torch.Tensor` of shape `(num_videos)`, *optional*):
         The time interval (in seconds) for each grid along the temporal dimension in the 3D position IDs.
-
     Example:
-
     ```python
     >>> from PIL import Image
     >>> import requests
-    >>> from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-
-    >>> model = Qwen2_5_VLForConditionalGeneration.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct")
-    >>> processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct")
-
+    >>> from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+    >>> model = Qwen3VLForConditionalGeneration.from_pretrained("Qwen/Qwen3-VL")
+    >>> processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL")
     >>> messages = [
         {
             "role": "user",
@@ -74,10 +70,8 @@ def lce_forward(
     ]
     >>> url = "https://www.ilankelman.org/stopsigns/australia.jpg"
     >>> image = Image.open(requests.get(url, stream=True).raw)
-
     >>> text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     >>> inputs = processor(text=[text], images=[image], vision_infos=[vision_infos])
-
     >>> # Generate
     >>> generate_ids = model.generate(inputs.input_ids, max_length=30)
     >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
@@ -122,14 +116,13 @@ def lce_forward(
     if skip_logits is None:
         skip_logits = self.training and (labels is not None or shift_labels is not None)
 
-    # Compute loss
     if skip_logits:
         result = LigerForCausalLMLoss(
             hidden_states=hidden_states,
             lm_head_weight=self.lm_head.weight,
             labels=labels,
             shift_labels=shift_labels,
-            hidden_size=self.config.hidden_size,
+            hidden_size=self.config.text_config.hidden_size,
             **kwargs,
         )
         loss, _, token_accuracy = unpack_cross_entropy_result(result)
@@ -137,22 +130,16 @@ def lce_forward(
         logits = self.lm_head(hidden_states)
 
         loss = None
-        if labels is not None or shift_labels is not None:
-            loss = self.loss_function(
-                logits=logits,
-                labels=labels,
-                shift_labels=shift_labels,
-                vocab_size=self.config.vocab_size,
-            )
+        if labels is not None:
+            loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.text_config.vocab_size)
 
     if not return_dict:
-        output_tuple = (logits,) + outputs[1:]
-        output = (loss,) + output_tuple if loss is not None else output_tuple
+        output = (logits,) + outputs[1:]
+        output = (loss,) + output if loss is not None else output
         output = output + (token_accuracy,) if token_accuracy is not None else output
         return output
 
-    # Return Qwen2.5-VL output with token accuracy
-    return LigerQwen2_5_VLCausalLMOutputWithPast(
+    return LigerQwen3VLCausalLMOutputWithPast(
         loss=loss,
         logits=logits,
         past_key_values=outputs.past_key_values,

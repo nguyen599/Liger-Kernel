@@ -15,6 +15,7 @@ from liger_kernel.transformers.layer_norm import LigerLayerNorm  # noqa: F401
 from liger_kernel.transformers.llama4_rope import liger_llama4_text_rotary_pos_emb  # noqa: F401
 from liger_kernel.transformers.llama4_rope import liger_llama4_vision_rotary_pos_emb  # noqa: F401
 from liger_kernel.transformers.multi_token_attention import LigerMultiTokenAttention  # noqa: F401
+from liger_kernel.transformers.poly_norm import LigerPolyNorm  # noqa: F401
 from liger_kernel.transformers.rms_norm import LigerRMSNorm  # noqa: F401
 from liger_kernel.transformers.rope import liger_rotary_pos_emb  # noqa: F401
 from liger_kernel.transformers.softmax import LigerSoftmax  # noqa: F401
@@ -54,7 +55,11 @@ if TYPE_CHECKING:
     from liger_kernel.transformers.monkey_patch import apply_liger_kernel_to_qwen2_vl  # noqa: F401
     from liger_kernel.transformers.monkey_patch import apply_liger_kernel_to_qwen3  # noqa: F401
     from liger_kernel.transformers.monkey_patch import apply_liger_kernel_to_qwen3_moe  # noqa: F401
+    from liger_kernel.transformers.monkey_patch import apply_liger_kernel_to_qwen3_next  # noqa: F401
+    from liger_kernel.transformers.monkey_patch import apply_liger_kernel_to_qwen3_vl  # noqa: F401
+    from liger_kernel.transformers.monkey_patch import apply_liger_kernel_to_qwen3_vl_moe  # noqa: F401
     from liger_kernel.transformers.monkey_patch import apply_liger_kernel_to_smollm3  # noqa: F401
+    from liger_kernel.transformers.monkey_patch import apply_liger_kernel_to_smolvlm  # noqa: F401
 
 
 # Check if 'transformers' is installed
@@ -116,7 +121,11 @@ def __getattr__(name: str):
         "apply_liger_kernel_to_qwen2_vl",
         "apply_liger_kernel_to_qwen3",
         "apply_liger_kernel_to_qwen3_moe",
+        "apply_liger_kernel_to_qwen3_next",
+        "apply_liger_kernel_to_qwen3_vl",
+        "apply_liger_kernel_to_qwen3_vl_moe",
         "apply_liger_kernel_to_smollm3",
+        "apply_liger_kernel_to_smolvlm",
     }
 
     if name in monkey_patch_symbols:
@@ -137,6 +146,7 @@ __all__ = [
     "LigerJSD",
     "LigerLayerNorm",
     "LigerFusedAddRMSNorm",
+    "LigerPolyNorm",
     "LigerRMSNorm",
     "liger_rotary_pos_emb",
     "liger_llama4_text_rotary_pos_emb",
@@ -183,6 +193,10 @@ if _TRANSFORMERS_AVAILABLE:
             "apply_liger_kernel_to_qwen2_vl",
             "apply_liger_kernel_to_qwen3",
             "apply_liger_kernel_to_qwen3_moe",
+            "apply_liger_kernel_to_qwen3_next",
+            "apply_liger_kernel_to_qwen3_vl",
+            "apply_liger_kernel_to_qwen3_vl_moe",
             "apply_liger_kernel_to_smollm3",
+            "apply_liger_kernel_to_smolvlm",
         ]
     )

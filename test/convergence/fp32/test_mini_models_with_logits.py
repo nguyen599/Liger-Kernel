@@ -1,3 +1,7 @@
+import os
+
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"  # Ensure deterministic behavior with CuBLAS
+
 import pytest
 import torch
 
@@ -40,12 +44,16 @@ from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from liger_kernel.transformers import apply_liger_kernel_to_qwen2_vl
 from liger_kernel.transformers import apply_liger_kernel_to_qwen3
 from liger_kernel.transformers import apply_liger_kernel_to_qwen3_moe
+from liger_kernel.transformers import apply_liger_kernel_to_qwen3_next
+from liger_kernel.transformers import apply_liger_kernel_to_qwen3_vl
+from liger_kernel.transformers import apply_liger_kernel_to_qwen3_vl_moe
 from liger_kernel.transformers import apply_liger_kernel_to_smollm3
 from test.utils import DEFAULT_DATASET_PATH
 from test.utils import MiniModelConfig
 from test.utils import assert_verbose_allclose
 from test.utils import get_logprobs
 from test.utils import get_topk
+from test.utils import require_deterministic
 from test.utils import revert_liger_kernel_to_falcon_h1
 from test.utils import revert_liger_kernel_to_gemma
 from test.utils import revert_liger_kernel_to_gemma2
@@ -68,6 +76,9 @@ from test.utils import revert_liger_kernel_to_qwen2_5_vl
 from test.utils import revert_liger_kernel_to_qwen2_vl
 from test.utils import revert_liger_kernel_to_qwen3
 from test.utils import revert_liger_kernel_to_qwen3_moe
+from test.utils import revert_liger_kernel_to_qwen3_next
+from test.utils import revert_liger_kernel_to_qwen3_vl
+from test.utils import revert_liger_kernel_to_qwen3_vl_moe
 from test.utils import revert_liger_kernel_to_smollm3
 from test.utils import set_seed
 from test.utils import simple_collate_fn
@@ -113,6 +124,32 @@ try:
 except ImportError:
     QWEN2_5_VL_AVAILABLE = False
 
+
+try:
+    import transformers
+
+    from packaging import version
+    from transformers.models.qwen3_vl.configuration_qwen3_vl import Qwen3VLConfig
+    from transformers.models.qwen3_vl.modeling_qwen3_vl import Qwen3VLForConditionalGeneration
+
+    QWEN3_VL_AVAILABLE = version.parse(transformers.__version__) >= version.parse("4.57.0")
+except ImportError:
+    QWEN3_VL_AVAILABLE = False
+
+
+try:
+    import transformers
+
+    from packaging import version
+    from transformers.models.qwen3_vl_moe.configuration_qwen3_vl_moe import Qwen3VLMoeConfig
+    from transformers.models.qwen3_vl_moe.configuration_qwen3_vl_moe import Qwen3VLMoeTextConfig
+    from transformers.models.qwen3_vl_moe.configuration_qwen3_vl_moe import Qwen3VLMoeVisionConfig
+    from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeForConditionalGeneration
+
+    QWEN3_VL_MOE_AVAILABLE = version.parse(transformers.__version__) >= version.parse("4.57.0")
+except ImportError:
+    QWEN3_VL_MOE_AVAILABLE = False
+
 try:
     from transformers.models.qwen3.configuration_qwen3 import Qwen3Config
     from transformers.models.qwen3.modeling_qwen3 import Qwen3ForCausalLM
@@ -122,6 +159,22 @@ try:
     QWEN3_AVAILABLE = True
 except ImportError:
     QWEN3_AVAILABLE = False
+
+try:
+    from transformers.models.qwen3_vl.configuration_qwen3_vl import Qwen3VLConfig
+    from transformers.models.qwen3_vl.modeling_qwen3_vl import Qwen3VLForConditionalGeneration
+
+    QWEN3_VL_AVAILABLE = True
+except ImportError:
+    QWEN3_VL_AVAILABLE = False
+
+try:
+    from transformers.models.qwen3_vl_moe.configuration_qwen3_vl_moe import Qwen3VLMoeConfig
+    from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeForConditionalGeneration
+
+    QWEN3_VL_MOE_AVAILABLE = True
+except ImportError:
+    QWEN3_VL_MOE_AVAILABLE = False
 
 try:
     from transformers.models.granite import GraniteConfig
@@ -210,6 +263,15 @@ try:
     FALCONH1_AVAILABLE = True
 except ImportError:
     FALCONH1_AVAILABLE = False
+
+try:
+    # Qwen3Next is only available in transformers>=4.57.0
+    from transformers.models.qwen3_next.configuration_qwen3_next import Qwen3NextConfig
+    from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextForCausalLM
+
+    QWEN3NEXT_AVAILABLE = True
+except ImportError:
+    QWEN3NEXT_AVAILABLE = False
 
 from liger_kernel.utils import infer_device
 
@@ -708,6 +770,120 @@ if QWEN2_5_VL_AVAILABLE:
         ),
     )
 
+if QWEN3_VL_AVAILABLE:
+    MINI_MODEL_SETUPS["mini_qwen3_vl"] = MiniModelConfig(
+        liger_kernel_patch_func=apply_liger_kernel_to_qwen3_vl,
+        liger_kernel_patch_revert_func=revert_liger_kernel_to_qwen3_vl,
+        model_class=Qwen3VLForConditionalGeneration,
+        mini_model_config=Qwen3VLConfig(
+            tie_word_embeddings=False,
+            image_token_id=31997,
+            video_token_id=31998,
+            vision_start_token_id=31995,
+            vision_end_token_id=31996,
+            text_config=dict(
+                attention_dropout=0.0,
+                attn_implementation="sdpa",
+                bos_token_id=1,
+                eos_token_id=2,
+                head_dim=112,
+                hidden_act="silu",
+                hidden_size=896,
+                initializer_range=0.02,
+                intermediate_size=4864,
+                max_position_embeddings=32768,
+                num_attention_heads=8,
+                num_hidden_layers=4,
+                num_key_value_heads=2,
+                pad_token_id=2,
+                rms_norm_eps=1e-6,
+                rope_theta=1000000.0,
+                rope_scaling=dict(
+                    type="mrope",
+                    mrope_section=[16, 24, 24],
+                ),
+                sliding_window=131072,
+                tie_word_embeddings=False,
+                use_cache=True,
+                vocab_size=32000,
+            ),
+            vision_config=dict(
+                depth=4,
+                hidden_size=128,
+                initializer_range=0.02,
+                intermediate_size=256,
+                num_heads=8,
+                in_channels=3,
+                patch_size=14,
+                spatial_merge_size=2,
+                temporal_patch_size=2,
+                out_hidden_size=896,
+                num_position_embeddings=576,
+                deepstack_visual_indexes=[1, 2, 3],
+            ),
+        ),
+    )
+
+if QWEN3_VL_MOE_AVAILABLE:
+    MINI_MODEL_SETUPS["mini_qwen3_vl_moe"] = MiniModelConfig(
+        liger_kernel_patch_func=apply_liger_kernel_to_qwen3_vl_moe,
+        liger_kernel_patch_revert_func=revert_liger_kernel_to_qwen3_vl_moe,
+        model_class=Qwen3VLMoeForConditionalGeneration,
+        mini_model_config=Qwen3VLMoeConfig(
+            tie_word_embeddings=False,
+            image_token_id=31997,
+            video_token_id=31998,
+            vision_start_token_id=31995,
+            vision_end_token_id=31996,
+            text_config=Qwen3VLMoeTextConfig(
+                attention_dropout=0.0,
+                attention_bias=False,
+                attn_implementation="sdpa",
+                bos_token_id=1,
+                eos_token_id=2,
+                head_dim=112,
+                hidden_act="silu",
+                hidden_size=896,
+                initializer_range=0.02,
+                intermediate_size=4864,
+                max_position_embeddings=32768,
+                num_attention_heads=8,
+                num_hidden_layers=4,
+                num_key_value_heads=2,
+                pad_token_id=2,
+                rms_norm_eps=1e-6,
+                rope_theta=1000000.0,
+                rope_scaling=dict(
+                    type="mrope",
+                    mrope_section=[16, 24, 24],
+                ),
+                sliding_window=131072,
+                tie_word_embeddings=False,
+                use_cache=True,
+                vocab_size=32000,
+                decoder_sparse_step=1,
+                moe_intermediate_size=3072,
+                num_experts_per_tok=2,
+                num_experts=4,
+                mlp_only_layers=[],
+            ).to_dict(),
+            vision_config=Qwen3VLMoeVisionConfig(
+                depth=4,
+                hidden_size=128,
+                initializer_range=0.02,
+                intermediate_size=256,
+                num_heads=8,
+                in_channels=3,
+                patch_size=14,
+                spatial_merge_size=2,
+                temporal_patch_size=2,
+                out_hidden_size=896,
+                num_position_embeddings=576,
+                deepstack_visual_indexes=[1, 2, 3],
+            ).to_dict(),
+        ),
+    )
+
 if GRANITE_AVAILABLE:
     MINI_MODEL_SETUPS["mini_granite3"] = MiniModelConfig(
         liger_kernel_patch_func=apply_liger_kernel_to_granite,
@@ -984,7 +1160,7 @@ if GLM4V_MOE_AVAILABLE:
                 "moe_intermediate_size": 1408,
                 "num_experts_per_tok": 2,
                 "n_shared_experts": 1,
-                "n_routed_experts": 128,
+                "n_routed_experts": 8,
                 "routed_scaling_factor": 1.0,
                 "n_group": 1,
                 "topk_group": 1,
@@ -1101,6 +1277,44 @@ if FALCONH1_AVAILABLE:
         ),
     )
 
+if QWEN3NEXT_AVAILABLE:
+    MINI_MODEL_SETUPS["mini_qwen3_next"] = MiniModelConfig(
+        liger_kernel_patch_func=apply_liger_kernel_to_qwen3_next,
+        liger_kernel_patch_revert_func=revert_liger_kernel_to_qwen3_next,
+        model_class=Qwen3NextForCausalLM,
+        mini_model_config=Qwen3NextConfig(  # Copypaste Qwen3MoeConfig
+            vocab_size=32000,
+            hidden_size=896,
+            intermediate_size=4864,
+            num_hidden_layers=4,
+            num_attention_heads=8,
+            num_key_value_heads=2,
+            hidden_act="silu",
+            max_position_embeddings=32768,
+            initializer_range=0.02,
+            rms_norm_eps=1e-6,
+            use_cache=True,
+            tie_word_embeddings=False,
+            rope_theta=10000.0,
+            rope_scaling=None,
+            attention_bias=False,
+            use_sliding_window=False,
+            sliding_window=4096,
+            max_window_layers=28,
+            attention_dropout=0.0,
+            decoder_sparse_step=1,
+            moe_intermediate_size=768,
+            num_experts_per_tok=2,
+            num_experts=8,
+            norm_topk_prob=False,
+            output_router_logits=False,
+            router_aux_loss_coef=0.001,
+            # config.dtype must be set if fla installed since there's a bug in the original code (No torch.get_current_dtype())
+            # https://github.com/huggingface/transformers/blob/v4.57.1/src/transformers/models/qwen3_next/modeling_qwen3_next.py#L613
+            dtype=torch.float32,
+        ),
+    )
+
 
 def create_model(model_name="mini_llama3"):
     """
@@ -1112,6 +1326,7 @@ def create_model(model_name="mini_llama3"):
     return model_class(model_config)
 
 
+@require_deterministic
 def run_mini_model(
     model_name="mini_llama3",
     num_steps=100,
@@ -1319,6 +1534,38 @@ def run_mini_model(
             ),
         ),
         pytest.param(
+            "mini_qwen3_vl",
+            32,
+            1e-4,
+            torch.float32,
+            1e-8,
+            2e-5,
+            5e-3,
+            1e-5,
+            5e-3,
+            1e-5,
+            marks=pytest.mark.skipif(
+                not QWEN3_VL_AVAILABLE,
+                reason="Qwen3-VL not available in this version of transformers",
+            ),
+        ),
+        pytest.param(
+            "mini_qwen3_vl_moe",
+            32,
+            1e-4,
+            torch.float32,
+            1e-8,
+            2e-5,
+            5e-3,
+            1e-5,
+            5e-3,
+            1e-5,
+            marks=pytest.mark.skipif(
+                not QWEN3_VL_MOE_AVAILABLE,
+                reason="Qwen3-VL-MoE not available in this version of transformers",
+            ),
+        ),
+        pytest.param(
             "mini_olmo2",
             32,
             1e-4,
@@ -1453,6 +1700,28 @@ def run_mini_model(
                 not FALCONH1_AVAILABLE,
                 reason="FalconH1 not available in this version of transformers",
             ),
+        ),
+        pytest.param(
+            "mini_qwen3_next",
+            32,
+            1e-5,
+            torch.float32,
+            1e-8,
+            1e-5,
+            5e-3,
+            1e-5,
+            5e-3,
+            1e-5,
+            marks=[
+                pytest.mark.skipif(
+                    not QWEN3NEXT_AVAILABLE,
+                    reason="Qwen3Next not available in this version of transformers",
+                ),
+                pytest.mark.skip(
+                    reason="flash-linear-attention's ChunkGatedDeltaRuleFunction does not support float32.\n"
+                    + " Torch's implementation takes too long"
+                ),
+            ],
         ),
     ],
 )

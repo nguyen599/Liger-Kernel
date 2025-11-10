@@ -5,6 +5,7 @@ import random
 
 from abc import abstractmethod
 from dataclasses import dataclass
+from functools import wraps
 from typing import Any
 from typing import Dict
 from typing import List
@@ -57,6 +58,19 @@ def set_seed(seed=42):
 
     # Python hash seed
     os.environ["PYTHONHASHSEED"] = str(seed)
+
+
+def require_deterministic(test_case):
+    @wraps(test_case)
+    def wrapper(*args, **kwargs):
+        original_state = torch.are_deterministic_algorithms_enabled()
+        try:
+            torch.use_deterministic_algorithms(True)
+            return test_case(*args, **kwargs)
+        finally:
+            torch.use_deterministic_algorithms(original_state)
+
+    return wrapper
 
 
 @torch.no_grad
@@ -490,6 +504,28 @@ def revert_liger_kernel_to_qwen2_5_vl(model_config: MiniModelConfig):
     print("Liger kernel patches have been reverted.")
 
 
+def revert_liger_kernel_to_qwen3_vl(model_config: MiniModelConfig):
+    """
+    Revert all Liger kernel patches applied to Qwen3-VL.
+    """
+    from transformers.models.qwen3_vl import modeling_qwen3_vl
+
+    importlib.reload(modeling_qwen3_vl)
+    model_config.model_class = modeling_qwen3_vl.Qwen3VLForConditionalGeneration
+    print("Liger kernel patches have been reverted.")
+
+
+def revert_liger_kernel_to_qwen3_vl_moe(model_config: MiniModelConfig):
+    """
+    Revert all Liger kernel patches applied to Qwen3-VL-MoE.
+    """
+    from transformers.models.qwen3_vl_moe import modeling_qwen3_vl_moe
+
+    importlib.reload(modeling_qwen3_vl_moe)
+    model_config.model_class = modeling_qwen3_vl_moe.Qwen3VLMoeForConditionalGeneration
+    print("Liger kernel patches have been reverted.")
+
+
 def revert_liger_kernel_to_phi3(model_config: MiniModelConfig):
     """
     Revert all Liger kernel patches applied to Phi3.
@@ -571,14 +607,33 @@ def revert_liger_kernel_to_internvl(model_config: MiniModelConfig):
     """
     Revert all Liger kernel patches applied to InternVL.
     """
+    import torch.nn as nn
 
     from transformers.models.internvl import modeling_internvl
     from transformers.models.qwen2 import modeling_qwen2
 
+    importlib.reload(nn)
     importlib.reload(modeling_internvl)
     importlib.reload(modeling_qwen2)
 
     model_config.model_class = modeling_internvl.InternVLForConditionalGeneration
+    print("Liger kernel patches have been reverted.")
+
+
+def revert_liger_kernel_to_smolvlm2(model_config: MiniModelConfig):
+    """
+    Revert all Liger kernel patches applied to SmolVLM2.
+    """
+    import torch.nn as nn
+
+    from transformers.models.llama import modeling_llama
+    from transformers.models.smolvlm import modeling_smolvlm
+
+    importlib.reload(nn)
+    importlib.reload(modeling_smolvlm)
+    importlib.reload(modeling_llama)
+
+    model_config.model_class = modeling_smolvlm.SmolVLMForConditionalGeneration
     print("Liger kernel patches have been reverted.")
 
 
@@ -591,6 +646,18 @@ def revert_liger_kernel_to_falcon_h1(model_config: MiniModelConfig):
 
     importlib.reload(modeling_falcon_h1)
     model_config.model_class = modeling_falcon_h1.FalconH1ForCausalLM
+    print("Liger kernel patches have been reverted.")
+
+
+def revert_liger_kernel_to_qwen3_next(model_config: MiniModelConfig):
+    """
+    Revert all Liger kernel patches applied to Qwen3Next.
+    """
+
+    from transformers.models.qwen3_next import modeling_qwen3_next
+
+    importlib.reload(modeling_qwen3_next)
+    model_config.model_class = modeling_qwen3_next.Qwen3NextForCausalLM
     print("Liger kernel patches have been reverted.")
 
 
