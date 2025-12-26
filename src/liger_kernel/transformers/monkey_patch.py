@@ -21,6 +21,7 @@ from liger_kernel.transformers.model.gemma import lce_forward as gemma_lce_forwa
 from liger_kernel.transformers.model.gemma import lce_forward_deprecated as gemma_lce_forward_deprecated
 from liger_kernel.transformers.model.gemma2 import lce_forward as gemma2_lce_forward
 from liger_kernel.transformers.model.gemma2 import lce_forward_deprecated as gemma2_lce_forward_deprected
+from liger_kernel.transformers.model.gpt_oss import lce_forward as gpt_oss_lce_forward
 from liger_kernel.transformers.model.llama import lce_forward as llama_lce_forward
 from liger_kernel.transformers.model.llama import lce_forward_deprecated as llama_lce_forward_deprecated
 from liger_kernel.transformers.model.llava import lce_forward as llava_lce_forward
@@ -35,8 +36,7 @@ from liger_kernel.transformers.model.smollm3 import lce_forward as smollm3_lce_f
 from liger_kernel.transformers.qwen2vl_mrope import liger_multimodal_rotary_pos_emb
 from liger_kernel.transformers.rms_norm import LigerRMSNorm
 from liger_kernel.transformers.rope import liger_rotary_pos_emb
-from liger_kernel.transformers.rope import liger_rotary_pos_emb_with_cast
-from liger_kernel.transformers.rope import liger_rotary_pos_emb_with_cast_and_leading_batch
+from liger_kernel.transformers.rope import liger_rotary_pos_emb_vision
 from liger_kernel.transformers.swiglu import LigerBlockSparseTop2MLP
 from liger_kernel.transformers.swiglu import LigerPhi3SwiGLUMLP
 from liger_kernel.transformers.swiglu import LigerSwiGLUMLP
@@ -431,7 +431,7 @@ def apply_liger_kernel_to_llava(
                     f"These parameters are not supported by {text_model_name}. Enter the remaining {list(text_kwargs.keys())} except for {list(remain_params)}\n"
                     f"Parameters accepted by {text_model_name}: {list(accept_params.keys())}"
                 )
-            text_kwargs["model"] = model.language_model
+            text_kwargs["model"] = model.model.language_model
             text_liger_fn(**text_kwargs)
         elif text_model_name not in MODEL_TYPE_TO_APPLY_LIGER_FN:
             logger.warning(f"{text_model_name} is not supported by Liger kernel.")
@@ -446,7 +446,7 @@ def apply_liger_kernel_to_llava(
                     f"These parameters are not supported by {vision_model_name}. Enter the remaining {list(vision_kwargs.keys())} except for {list(remain_params)}\n"
                     f"Parameters accepted by {vision_model_name}: {list(accept_params.keys())}"
                 )
-            vision_kwargs["model"] = model.vision_tower
+            vision_kwargs["model"] = model.model.vision_tower
             vision_liger_fn(**vision_kwargs)
         elif vision_model_name not in MODEL_TYPE_TO_APPLY_LIGER_FN:
             logger.warning(f"{vision_model_name} is not supported by Liger kernel.")
@@ -616,8 +616,8 @@ def apply_liger_kernel_to_mllama(
         # instance variables that reference already-instantiated modules
 
         if isinstance(model, MllamaForConditionalGeneration):
-            language_model: MllamaForCausalLM = model.language_model
-            vision_model: MllamaVisionModel = model.vision_model
+            language_model: MllamaForCausalLM = model.model.language_model
+            vision_model: MllamaVisionModel = model.model.vision_model
             if isinstance(language_model, MllamaForCausalLM):
                 text_model: MllamaTextModel = language_model.model
             else:
@@ -1119,8 +1119,8 @@ def apply_liger_kernel_to_gemma3(
         # instance variables that reference already-instantiated modules
 
         if isinstance(model, Gemma3ForConditionalGeneration):
-            if isinstance(model.vision_tower, SiglipVisionModel):
-                vision_tower = model.vision_tower
+            if isinstance(model.model.vision_tower, SiglipVisionModel):
+                vision_tower = model.model.vision_tower
 
                 _patch_layer_norm_module(vision_tower.vision_model.post_layernorm)
 
@@ -1133,7 +1133,7 @@ def apply_liger_kernel_to_gemma3(
                 raise TypeError("The vision tower must be SiglipVisionModel")
 
             if rms_norm:
-                _patch_rms_norm_module_for_gemma3(model.multi_modal_projector.mm_soft_emb_norm)
+                _patch_rms_norm_module_for_gemma3(model.model.multi_modal_projector.mm_soft_emb_norm)
 
             apply_liger_kernel_to_gemma3_text(
                 rope=rope,
@@ -1141,7 +1141,7 @@ def apply_liger_kernel_to_gemma3(
                 fused_linear_cross_entropy=False,
                 rms_norm=rms_norm,
                 geglu=geglu,
-                model=model.language_model,
+                model=model.model.language_model,
             )
 
         else:
@@ -1229,7 +1229,7 @@ def apply_liger_kernel_to_paligemma(
         if not isinstance(model, PaliGemmaForConditionalGeneration):
             raise TypeError("model have to be of type PaliGemmaForConditionalGeneration")
 
-        vision_tower: SiglipVisionModel = model.vision_tower
+        vision_tower: SiglipVisionModel = model.model.vision_tower
 
         _patch_layer_norm_module(vision_tower.vision_model.post_layernorm)
 
@@ -1239,7 +1239,7 @@ def apply_liger_kernel_to_paligemma(
                 _patch_layer_norm_module(layer.layer_norm1)
                 _patch_layer_norm_module(layer.layer_norm2)
 
-        language_model = model.language_model
+        language_model = model.model.language_model
 
         if isinstance(language_model, (GemmaForCausalLM, GemmaModel)):
             apply_liger_kernel_to_gemma(
@@ -1460,6 +1460,79 @@ def apply_liger_kernel_to_qwen3_moe(
                 _patch_rms_norm_module(decoder_layer.post_attention_layernorm)
 
 
+def apply_liger_kernel_to_gpt_oss(
+    rope: bool = True,
+    cross_entropy: bool = False,
+    fused_linear_cross_entropy: bool = True,
+    rms_norm: bool = True,
+    swiglu: bool = False,  # Set to False by default since GPT-OSS has custom expert implementation
+    model: PreTrainedModel = None,
+) -> None:
+    """
+    Apply Liger kernels to replace original implementation in HuggingFace GPT-OSS models.
+    NOTE: GPT-OSS is supported in transformers >= 4.55.0
+    NOTE: SwiGLU patching is disabled by default for GPT-OSS as it uses a custom expert
+          implementation with clamping and MXFP4 quantization.
+
+    Args:
+        rope (bool): Whether to apply Liger's rotary position embedding. Default is True.
+        cross_entropy (bool): Whether to apply Liger's cross entropy loss. Default is False.
+        fused_linear_cross_entropy (bool):
+            Whether to apply Liger's fused linear cross entropy loss. Default is True.
+            `cross_entropy` and `fused_linear_cross_entropy` cannot both be True.
+            If `fused_linear_cross_entropy` is True, the logits will not be materialized but more memory efficient.
+        rms_norm (bool): Whether to apply Liger's RMSNorm. Default is True.
+        swiglu (bool): Whether to apply Liger's SwiGLU MLP. Default is False.
+            Note: GPT-OSS uses a custom expert implementation, so SwiGLU patching is disabled by default.
+        model (PreTrainedModel): The model instance to apply Liger kernels to, if the model has already been
+            loaded. Default is None.
+    """
+    if version.parse(transformers.__version__) < version.parse("4.55.0"):
+        logger.warning("GPT-OSS support requires transformers >= 4.55.0")
+        return
+
+    assert not (cross_entropy and fused_linear_cross_entropy), (
+        "cross_entropy and fused_linear_cross_entropy cannot both be True."
+    )
+
+    from transformers.models.gpt_oss import modeling_gpt_oss
+    from transformers.models.gpt_oss.modeling_gpt_oss import GptOssModel
+
+    if rope:
+        modeling_gpt_oss.apply_rotary_pos_emb = liger_rotary_pos_emb
+
+    if rms_norm:
+        modeling_gpt_oss.GptOssRMSNorm = LigerRMSNorm
+
+    if cross_entropy:
+        from transformers.loss.loss_utils import nn
+
+        nn.functional.cross_entropy = liger_cross_entropy
+
+    if fused_linear_cross_entropy:
+        if model is not None:
+            model.forward = MethodType(gpt_oss_lce_forward, model)
+        else:
+            modeling_gpt_oss.GptOssForCausalLM.forward = gpt_oss_lce_forward
+
+    # Note: SwiGLU patching is not implemented for GPT-OSS due to custom expert implementation
+    # with clamping (swiglu_limit=7.0) and MXFP4 quantization
+
+    if model is not None:
+        # The model instance already exists, so we need to additionally patch the
+        # instance variables that reference already-instantiated modules
+
+        # get the base model from the model instance
+        base_model: GptOssModel = getattr(model, model.base_model_prefix, model)
+
+        if rms_norm:
+            _patch_rms_norm_module(base_model.norm)
+        for decoder_layer in base_model.layers:
+            if rms_norm:
+                _patch_rms_norm_module(decoder_layer.input_layernorm)
+                _patch_rms_norm_module(decoder_layer.post_attention_layernorm)
+
+
 def apply_liger_kernel_to_qwen2_vl(
     rope: bool = True,
     cross_entropy: bool = False,
@@ -1521,11 +1594,10 @@ def apply_liger_kernel_to_qwen2_vl(
     if model is not None:
         # The model instance already exists, so we need to additionally patch the
         # instance variables that reference already-instantiated modules
-
-        if isinstance(model, (Qwen2VLForConditionalGeneration, Qwen2VLModel)):
-            # Note: language_model and visual properties can be accessed throught conditional class for BC.
-            # Not sure if it is subject to changes in the future.
-            # Reference: https://github.com/huggingface/transformers/blob/v4.52.4/src/transformers/models/qwen2_vl/modeling_qwen2_vl.py#L1698
+        if isinstance(model, Qwen2VLForConditionalGeneration):
+            text_model: Qwen2VLTextModel = model.model.language_model
+            vision_model: Qwen2VisionTransformerPretrainedModel = model.model.visual
+        elif isinstance(model, Qwen2VLModel):
             text_model: Qwen2VLTextModel = model.language_model
             vision_model: Qwen2VisionTransformerPretrainedModel = model.visual
         elif isinstance(model, Qwen2VLTextModel):
@@ -1612,11 +1684,10 @@ def apply_liger_kernel_to_qwen2_5_vl(
     if model is not None:
         # The model instance already exists, so we need to additionally patch the
         # instance variables that reference already-instantiated modules
-
-        if isinstance(model, (Qwen2_5_VLForConditionalGeneration, Qwen2_5_VLModel)):
-            # Note: language_model and visual properties can be accessed throught conditional class for BC.
-            # Not sure if it is subject to changes in the future.
-            # Reference: https://github.com/huggingface/transformers/blob/v4.52.4/src/transformers/models/qwen2_5_vl/modeling_qwen2_5_vl.py#L1823
+        if isinstance(model, Qwen2_5_VLForConditionalGeneration):
+            text_model: Qwen2_5_VLTextModel = model.model.language_model
+            vision_model: Qwen2_5_VisionTransformerPretrainedModel = model.model.visual
+        elif isinstance(model, Qwen2_5_VLModel):
             text_model: Qwen2_5_VLTextModel = model.language_model
             vision_model: Qwen2_5_VisionTransformerPretrainedModel = model.visual
         elif isinstance(model, Qwen2_5_VLTextModel):
@@ -1630,7 +1701,7 @@ def apply_liger_kernel_to_qwen2_5_vl(
 
         if vision_model is not None:
             # Patch Qwen2_5_VisionTransformerPretrainedModel
-            for vision_block in model.visual.blocks:
+            for vision_block in vision_model.blocks:
                 if rms_norm:
                     _patch_rms_norm_module(vision_block.norm1)
                     _patch_rms_norm_module(vision_block.norm2)
@@ -1681,8 +1752,8 @@ def apply_liger_kernel_to_qwen3_vl(
     from liger_kernel.transformers.model.qwen3_vl import lce_forward as qwen3_vl_lce_forward
 
     if rope:
-        modeling_qwen3_vl.apply_rotary_pos_emb = liger_rotary_pos_emb_with_cast
-        modeling_qwen3_vl.apply_rotary_pos_emb_vision = liger_rotary_pos_emb_with_cast_and_leading_batch
+        modeling_qwen3_vl.apply_rotary_pos_emb = liger_rotary_pos_emb
+        modeling_qwen3_vl.apply_rotary_pos_emb_vision = liger_rotary_pos_emb_vision
 
     if rms_norm:
         modeling_qwen3_vl.Qwen3VLTextRMSNorm = LigerRMSNorm
@@ -1699,7 +1770,9 @@ def apply_liger_kernel_to_qwen3_vl(
             modeling_qwen3_vl.Qwen3VLForConditionalGeneration.forward = qwen3_vl_lce_forward
 
     if model is not None and rms_norm:
-        if isinstance(model, (Qwen3VLForConditionalGeneration, Qwen3VLModel)):
+        if isinstance(model, Qwen3VLForConditionalGeneration):
+            text_model: Qwen3VLTextModel = model.model.language_model
+        elif isinstance(model, Qwen3VLModel):
             text_model: Qwen3VLTextModel = model.language_model
         elif isinstance(model, Qwen3VLTextModel):
             text_model = model
@@ -1756,8 +1829,8 @@ def apply_liger_kernel_to_qwen3_vl_moe(
     from liger_kernel.transformers.model.qwen3_vl_moe import lce_forward as qwen3_vl_moe_lce_forward
 
     if rope:
-        modeling_qwen3_vl_moe.apply_rotary_pos_emb = liger_rotary_pos_emb_with_cast
-        modeling_qwen3_vl_moe.apply_rotary_pos_emb_vision = liger_rotary_pos_emb_with_cast_and_leading_batch
+        modeling_qwen3_vl_moe.apply_rotary_pos_emb = liger_rotary_pos_emb
+        modeling_qwen3_vl_moe.apply_rotary_pos_emb_vision = liger_rotary_pos_emb_vision
 
     if rms_norm:
         modeling_qwen3_vl_moe.Qwen3VLMoeTextRMSNorm = LigerRMSNorm
@@ -1774,7 +1847,9 @@ def apply_liger_kernel_to_qwen3_vl_moe(
             modeling_qwen3_vl_moe.Qwen3VLMoeForConditionalGeneration.forward = qwen3_vl_moe_lce_forward
 
     if model is not None and rms_norm:
-        if isinstance(model, (Qwen3VLMoeForConditionalGeneration, Qwen3VLMoeModel)):
+        if isinstance(model, Qwen3VLMoeForConditionalGeneration):
+            text_model: Qwen3VLMoeTextModel = model.model.language_model
+        elif isinstance(model, Qwen3VLMoeModel):
             text_model: Qwen3VLMoeTextModel = model.language_model
         elif isinstance(model, Qwen3VLMoeTextModel):
             text_model = model
@@ -1929,6 +2004,74 @@ def apply_liger_kernel_to_olmo2(
                 _patch_rms_norm_module(decoder_layer.post_feedforward_layernorm, in_place=False)
 
 
+def apply_liger_kernel_to_olmo3(
+    rope: bool = True,
+    cross_entropy: bool = False,
+    fused_linear_cross_entropy: bool = True,
+    rms_norm: bool = True,
+    swiglu: bool = True,
+    model: PreTrainedModel = None,
+) -> None:
+    """
+    Apply Liger kernels to replace original implementation in HuggingFace Olmo3 models.
+
+    Args:
+        rope (bool): Whether to apply Liger's rotary position embedding. Default is True.
+        cross_entropy (bool): Whether to apply Liger's cross entropy loss. Default is False.
+        fused_linear_cross_entropy (bool):
+            Whether to apply Liger's fused linear cross entropy loss. Default is True.
+            `cross_entropy` and `fused_linear_cross_entropy` cannot both be True.
+            If `fused_linear_cross_entropy` is True, the logits will not be materialized but more memory efficient.
+        rms_norm (bool): Whether to apply Liger's RMSNorm. Default is True.
+        swiglu (bool): Whether to apply Liger's SwiGLU to Olmo3MLP. Default is True.
+        model (PreTrainedModel): The model instance to apply Liger kernels to, if the model has already been
+        loaded. Default is None.
+    """
+    assert not (cross_entropy and fused_linear_cross_entropy), (
+        "cross_entropy and fused_linear_cross_entropy cannot both be True."
+    )
+
+    from transformers.models.olmo3 import modeling_olmo3
+    from transformers.models.olmo3.modeling_olmo3 import Olmo3Model
+
+    from liger_kernel.transformers.model.olmo3 import lce_forward as olmo3_lce_forward
+    from liger_kernel.transformers.rms_norm import LigerRMSNormForOlmo2
+
+    # Olmo3 arch is very similar to Olmo2, so we can reuse all these components in the same way.
+    if rope:
+        modeling_olmo3.apply_rotary_pos_emb = liger_rotary_pos_emb
+    if rms_norm:
+        modeling_olmo3.Olmo3RMSNorm = LigerRMSNormForOlmo2  # same as olmo2
+    if swiglu:
+        modeling_olmo3.Olmo3MLP = LigerSwiGLUMLP
+    if cross_entropy:
+        from transformers.loss.loss_utils import nn
+
+        nn.functional.cross_entropy = liger_cross_entropy
+    if fused_linear_cross_entropy:
+        if model is not None:
+            model.forward = MethodType(olmo3_lce_forward, model)
+        else:
+            modeling_olmo3.Olmo3ForCausalLM.forward = olmo3_lce_forward
+
+    if model is not None:
+        # The model instance already exists, so we need to additionally patch the
+        # instance variables that reference already-instantiated modules
+
+        # get the base model from the model instance
+        base_model: Olmo3Model = getattr(model, model.base_model_prefix, model)
+
+        if rms_norm:
+            _patch_rms_norm_module(base_model.norm)
+
+        for decoder_layer in base_model.layers:
+            if swiglu:
+                _patch_swiglu_module(decoder_layer.mlp, LigerSwiGLUMLP)
+            if rms_norm:
+                _patch_rms_norm_module(decoder_layer.post_attention_layernorm, in_place=False)
+                _patch_rms_norm_module(decoder_layer.post_feedforward_layernorm, in_place=False)
+
+
 def apply_liger_kernel_to_glm4(
     rope: bool = False,
     cross_entropy: bool = False,
@@ -2051,10 +2194,10 @@ def apply_liger_kernel_to_glm4v(
     if model is not None:
         # The model instance already exists, so we need to additionally patch the
         # instance variables that reference already-instantiated modules
-        if isinstance(model, (Glm4vForConditionalGeneration, Glm4vModel)):
-            # Note: language_model and visual properties can be accessed throught conditional class for BC.
-            # Not sure if it is subject to changes in the future.
-            # Reference: https://github.com/huggingface/transformers/blob/main/src/transformers/models/glm4v/modeling_glm4v.py#L1305
+        if isinstance(model, Glm4vForConditionalGeneration):
+            text_model: Glm4vTextModel = model.model.language_model
+            vision_model: Glm4vVisionModel = model.model.visual
+        elif isinstance(model, Glm4vModel):
             text_model: Glm4vTextModel = model.language_model
             vision_model: Glm4vVisionModel = model.visual
         elif isinstance(model, Glm4vTextModel):
@@ -2141,10 +2284,11 @@ def apply_liger_kernel_to_glm4v_moe(
     if model is not None:
         # The model instance already exists, so we need to additionally patch the
         # instance variables that reference already-instantiated modules
-        if isinstance(model, (Glm4vMoeForConditionalGeneration, Glm4vMoeModel)):
-            # Note: language_model and visual properties can be accessed throught conditional class for BC.
-            # Not sure if it is subject to changes in the future.
-            # Reference: https://github.com/huggingface/transformers/blob/main/src/transformers/models/glm4v_moe/modeling_glm4v_moe.py#L337
+        if isinstance(model, Glm4vMoeForConditionalGeneration):
+            text_model: Glm4vMoeTextModel = model.model.language_model
+            vision_model: Glm4vMoeVisionModel = model.model.visual
+            Glm4vMoeTextMoE = modeling_glm4v_moe.Glm4vMoeTextMoE
+        elif isinstance(model, Glm4vMoeModel):
             text_model: Glm4vMoeTextModel = model.language_model
             vision_model: Glm4vMoeVisionModel = model.visual
             Glm4vMoeTextMoE = modeling_glm4v_moe.Glm4vMoeTextMoE
@@ -2247,8 +2391,10 @@ def apply_liger_kernel_to_internvl(
     if model is not None:
         # The model instance already exists, so we need to additionally patch the
         # instance variables that reference already-instantiated modules
-        if isinstance(model, (InternVLForConditionalGeneration, InternVLModel)):
-            # NOTE: language_model and visual properties can be accessed throught conditional class.
+        if isinstance(model, InternVLForConditionalGeneration):
+            text_model = model.model.language_model
+            vision_model: InternVLVisionModel = model.model.vision_tower
+        elif isinstance(model, InternVLModel):
             text_model = model.language_model
             vision_model: InternVLVisionModel = model.vision_tower
         else:
@@ -2559,6 +2705,123 @@ def apply_liger_kernel_to_qwen3_next(
                             _patch_swiglu_module(expert, LigerQwen3MoeSwiGLUMLP)
 
 
+def apply_liger_kernel_to_hunyuan_v1_dense(
+    rope: bool = True,
+    cross_entropy: bool = False,
+    fused_linear_cross_entropy: bool = True,
+    rms_norm: bool = True,
+    swiglu: bool = True,
+    model: PreTrainedModel = None,
+) -> None:
+    """
+    Apply Liger kernels to replace original implementation in HuggingFace Hunyuan v1 dense models.
+    """
+    assert not (cross_entropy and fused_linear_cross_entropy), (
+        "cross_entropy and fused_linear_cross_entropy cannot both be True."
+    )
+
+    from transformers.models.hunyuan_v1_dense import modeling_hunyuan_v1_dense
+    from transformers.models.hunyuan_v1_dense.modeling_hunyuan_v1_dense import HunYuanDenseV1Model
+
+    from liger_kernel.transformers.model.hunyuan_v1 import lce_forward as hunyuan_v1_lce_forward
+    from liger_kernel.transformers.swiglu import LigerHunyuanV1SwiGLUMLP
+
+    if rope:
+        modeling_hunyuan_v1_dense.apply_rotary_pos_emb = liger_rotary_pos_emb
+
+    if rms_norm:
+        modeling_hunyuan_v1_dense.HunYuanDenseV1RMSNorm = LigerRMSNorm
+
+    if cross_entropy:
+        from transformers.loss.loss_utils import nn
+
+        nn.functional.cross_entropy = liger_cross_entropy
+
+    if fused_linear_cross_entropy:
+        if model is not None:
+            model.forward = MethodType(hunyuan_v1_lce_forward, model)
+        else:
+            modeling_hunyuan_v1_dense.HunYuanDenseV1ForCausalLM.forward = hunyuan_v1_lce_forward
+
+    if swiglu:
+        modeling_hunyuan_v1_dense.HunYuanDenseV1MLP = LigerHunyuanV1SwiGLUMLP
+
+    if model is not None:
+        # The model instance already exists, so we need to additionally patch the
+        # instance variables that reference already-instantiated modules
+
+        # get the base model from the model instance
+        base_model: HunYuanDenseV1Model = getattr(model, model.base_model_prefix, model)
+
+        if rms_norm:
+            _patch_rms_norm_module(base_model.norm)
+        for decoder_layer in base_model.layers:
+            if swiglu:
+                _patch_swiglu_module(decoder_layer.mlp, LigerHunyuanV1SwiGLUMLP)
+            if rms_norm:
+                _patch_rms_norm_module(decoder_layer.input_layernorm)
+                _patch_rms_norm_module(decoder_layer.post_attention_layernorm)
+
+
+def apply_liger_kernel_to_hunyuan_v1_moe(
+    rope: bool = True,
+    cross_entropy: bool = False,
+    fused_linear_cross_entropy: bool = True,
+    rms_norm: bool = True,
+    swiglu: bool = True,
+    model: PreTrainedModel = None,
+) -> None:
+    """
+    Apply Liger kernels to replace original implementation in HuggingFace Qwen3 models.
+    """
+    assert not (cross_entropy and fused_linear_cross_entropy), (
+        "cross_entropy and fused_linear_cross_entropy cannot both be True."
+    )
+
+    from transformers.models.hunyuan_v1_moe import modeling_hunyuan_v1_moe
+    from transformers.models.hunyuan_v1_moe.modeling_hunyuan_v1_moe import HunYuanMoEV1Model
+
+    from liger_kernel.transformers.model.hunyuan_v1 import lce_forward as hunyuan_v1_moe_lce_forward
+    from liger_kernel.transformers.swiglu import LigerHunyuanV1SwiGLUMLP
+
+    if rope:
+        modeling_hunyuan_v1_moe.apply_rotary_pos_emb = liger_rotary_pos_emb
+
+    if rms_norm:
+        modeling_hunyuan_v1_moe.HunYuanMoEV1RMSNorm = LigerRMSNorm
+
+    if cross_entropy:
+        from transformers.loss.loss_utils import nn
+
+        nn.functional.cross_entropy = liger_cross_entropy
+
+    if fused_linear_cross_entropy:
+        if model is not None:
+            model.forward = MethodType(hunyuan_v1_moe_lce_forward, model)
+        else:
+            modeling_hunyuan_v1_moe.HunYuanMoEV1ForCausalLM.forward = hunyuan_v1_moe_lce_forward
+
+    if swiglu:
+        modeling_hunyuan_v1_moe.HunYuanMoEV1MLP = LigerHunyuanV1SwiGLUMLP
+
+    if model is not None:
+        # The model instance already exists, so we need to additionally patch the
+        # instance variables that reference already-instantiated modules
+
+        # get the base model from the model instance
+        base_model: HunYuanMoEV1Model = getattr(model, model.base_model_prefix, model)
+
+        if rms_norm:
+            _patch_rms_norm_module(base_model.norm)
+        for decoder_layer in base_model.layers:
+            if swiglu:
+                for mlp_expert in decoder_layer.mlp.experts:
+                    _patch_swiglu_module(mlp_expert, LigerHunyuanV1SwiGLUMLP)
+            if rms_norm:
+                _patch_rms_norm_module(decoder_layer.input_layernorm)
+                _patch_rms_norm_module(decoder_layer.post_attention_layernorm)
+
+
 # Model type corresponds to the keys defined in transformers/models/auto/modeling_auto.py
 MODEL_TYPE_TO_APPLY_LIGER_FN = {
     "gemma": apply_liger_kernel_to_gemma,
@@ -2568,6 +2831,7 @@ MODEL_TYPE_TO_APPLY_LIGER_FN = {
     "glm4": apply_liger_kernel_to_glm4,
     "glm4v": apply_liger_kernel_to_glm4v,
     "glm4v_moe": apply_liger_kernel_to_glm4v_moe,
+    "gpt_oss": apply_liger_kernel_to_gpt_oss,
     "internvl": apply_liger_kernel_to_internvl,
     "llama": apply_liger_kernel_to_llama,
     "llama4_text": apply_liger_kernel_to_llama4,
@@ -2579,6 +2843,7 @@ MODEL_TYPE_TO_APPLY_LIGER_FN = {
     "mistral": apply_liger_kernel_to_mistral,
     "mixtral": apply_liger_kernel_to_mixtral,
     "olmo2": apply_liger_kernel_to_olmo2,
+    "olmo3": apply_liger_kernel_to_olmo3,
     "qwen2": apply_liger_kernel_to_qwen2,
     "qwen3": apply_liger_kernel_to_qwen3,
     "qwen3_moe": apply_liger_kernel_to_qwen3_moe,
@@ -2596,6 +2861,8 @@ MODEL_TYPE_TO_APPLY_LIGER_FN = {
     "paligemma": apply_liger_kernel_to_paligemma,
     "falcon_h1": apply_liger_kernel_to_falcon_h1,
     "smolvlm": apply_liger_kernel_to_smolvlm,
+    "hunyuan_v1_dense": apply_liger_kernel_to_hunyuan_v1_dense,
+    "hunyuan_v1_moe": apply_liger_kernel_to_hunyuan_v1_moe,
 }
 
 
