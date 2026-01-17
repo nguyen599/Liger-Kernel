@@ -129,3 +129,26 @@ def element_mul_kernel(
         X_offsets = i + tl.arange(0, BLOCK_SIZE)
         X_block = tl.load(X_ptr + X_offsets, mask=X_offsets < n_cols)
         tl.store(X_ptr + X_offsets, X_block * grad_output, mask=X_offsets < n_cols)
+
+
+def get_npu_core_count(default: int = 20) -> int:
+    """Return NPU vector core count.
+    Fallback to `default` if Triton runtime or NPU device is unavailable.
+    """
+    try:
+        utils = triton.runtime.driver.active.utils
+        props = utils.get_device_properties(0)
+        return int(props.get("num_vectorcore", default))
+    except Exception:
+        return default
+
+
+def set_large_grf_mode(kernel_args: dict):
+    """Set large GRF mode for XPU devices."""
+    # On XPU triton installed along with pytorch-xpu will be called `pytorch-triton-xpu`,
+    # triton XPU installed from source will be called `triton`.
+    if compare_version("pytorch-triton-xpu", operator.ge, "3.6.0") or compare_version("triton", operator.ge, "3.6.0"):
+        kernel_args["grf_mode"] = "256"
+    else:
+        # API was changed in https://github.com/intel/intel-xpu-backend-for-triton/pull/5430
+        kernel_args["grf_mode"] = "large"

@@ -13,3 +13,37 @@ To add a new operator:
 
 If __all__ is not defined, all public symbols will be auto-discovered.
 """
+
+from liger_kernel.ops.backends._ascend.ops.geglu import LigerGELUMulFunction
+from liger_kernel.ops.backends._ascend.ops.geglu import geglu_backward
+from liger_kernel.ops.backends._ascend.ops.geglu import geglu_forward
+from liger_kernel.ops.backends._ascend.ops.qwen2vl_mrope import LigerQwen2VLMRopeFunction
+from liger_kernel.ops.backends._ascend.ops.qwen2vl_mrope import qwen2vl_mrope_backward
+from liger_kernel.ops.backends._ascend.ops.qwen2vl_mrope import qwen2vl_mrope_forward
+from liger_kernel.ops.backends._ascend.ops.rope import LigerRopeFunction
+from liger_kernel.ops.backends._ascend.ops.rope import rope_backward
+from liger_kernel.ops.backends._ascend.ops.rope import rope_forward
+from liger_kernel.ops.backends._ascend.ops.swiglu import LigerSiLUMulFunction
+from liger_kernel.ops.backends._ascend.ops.swiglu import swiglu_backward
+from liger_kernel.ops.backends._ascend.ops.swiglu import swiglu_forward
+from liger_kernel.ops.backends._ascend.ops.tvd import LigerTVDLossFunction
+from liger_kernel.ops.backends._ascend.ops.tvd import tv_distance_forward_triton
+from liger_kernel.ops.backends._ascend.ops.tvd import tvd_backward_triton
+
+__all__ = [
+    "LigerGELUMulFunction",
+    "geglu_forward",
+    "geglu_backward",
+    "LigerQwen2VLMRopeFunction",
+    "qwen2vl_mrope_forward",
+    "qwen2vl_mrope_backward",
+    "LigerRopeFunction",
+    "rope_forward",
+    "rope_backward",
+    "LigerSiLUMulFunction",
+    "swiglu_forward",
+    "swiglu_backward",
+    "LigerTVDLossFunction",
+    "tv_distance_forward_triton",
+    "tvd_backward_triton",
+]
